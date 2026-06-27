@@ -105,12 +105,34 @@ ramp = {}
 for yy in range(RY0, RY1+1):
     t = (yy - RY0) / max(1, RY1 - RY0)
     ramp[yy] = tuple(int(TOP[c] + (BOT[c]-TOP[c]) * t) for c in range(3))
-# dark banner fill = median of non-gold, non-transparent pixels inside R
+# 8-neighbour dilation helpers
+def dilate(m):
+    d = m.copy()
+    d[1:, :] |= m[:-1, :]; d[:-1, :] |= m[1:, :]
+    d[:, 1:] |= m[:, :-1]; d[:, :-1] |= m[:, 1:]
+    d[1:, 1:] |= m[:-1, :-1]; d[:-1, :-1] |= m[1:, 1:]
+    d[1:, :-1] |= m[:-1, 1:]; d[:-1, 1:] |= m[1:, :-1]
+    return d
+def dilate_n(m, n):
+    for _ in range(n): m = dilate(m)
+    return m
+
 inR = np.zeros((H, W), bool); inR[RY0:RY1+1, RX0:RX1+1] = True
-darkpx = inR & (owner >= 0) & (~gold)
-darkcol = tuple(np.median(base[darkpx], axis=0).astype(int)) if darkpx.any() else (28, 18, 12)
-OUTLINE = (54, 30, 12)
-print("dark banner fill:", darkcol, " ramp top:", ramp[RY0], " bottom:", ramp[RY1])
+# erase region: gold bbox padded slightly, but NEVER into the red K (x<176)
+EX0, EX1 = max(8, RX0-2), min(175, RX1+2); EY0, EY1 = max(0, RY0-2), RY1+2
+inER = np.zeros((H, W), bool); inER[EY0:EY1+1, EX0:EX1+1] = True
+bright = base.max(axis=2).astype(int)
+bch = base[:, :, 2].astype(int); rch = base[:, :, 0].astype(int)
+# navy plate behind the katakana = dark bluish median inside R
+navy_px = inR & (owner >= 0) & (~gold) & (bch >= rch) & (bright < 115)
+NAVY = tuple(int(v) for v in np.median(base[navy_px], axis=0)) if navy_px.any() else (16, 16, 40)
+# katakana outline colour = dark ring just outside the gold
+ring = dilate_n(gold, 3) & (~gold) & (owner >= 0) & (bright < 95)
+OUTLINE = tuple(int(v) for v in np.median(base[ring], axis=0)) if ring.any() else (20, 18, 36)
+# full katakana silhouette to erase (gold fill + its outline ring), clipped to erase region
+erase_full = dilate_n(gold, 3) & inER
+print("NAVY plate:", NAVY, " katakana outline:", OUTLINE, " ramp:", ramp[RY0], ramp[RY1],
+      " navy_px:", int(navy_px.sum()), " erase:", int(erase_full.sum()))
 
 # ---- render Korean ink mask (fill + outline) fitted to R ----
 TEXT = "슈퍼로봇대전"
@@ -131,30 +153,22 @@ for yy in range(gnp.shape[0]):
     for xx in range(gnp.shape[1]):
         if gnp[yy, xx] > 90:
             fill_mask[oy+yy, ox+xx] = True
-# outline = dilate(fill) minus fill (manual 2-iteration 4/8-neighbour dilation)
-def dilate(m):
-    d = m.copy()
-    d[1:, :] |= m[:-1, :]; d[:-1, :] |= m[1:, :]
-    d[:, 1:] |= m[:, :-1]; d[:, :-1] |= m[:, 1:]
-    d[1:, 1:] |= m[:-1, :-1]; d[:-1, :-1] |= m[1:, 1:]
-    d[1:, :-1] |= m[:-1, 1:]; d[:-1, 1:] |= m[1:, :-1]
-    return d
-dil = dilate(dilate(fill_mask))
-outline_mask = dil & (~fill_mask)
+# outline = 2px dilation of the Korean fill, minus the fill itself
+outline_mask = dilate_n(fill_mask, 2) & (~fill_mask)
 
 # ---- build TARGET screen ----
 target = base.copy()
-# erase old katakana gold inside R -> dark banner
-er = inR & gold
-target[er] = darkcol
+# erase entire katakana (gold + outline ring) -> navy plate
+target[erase_full] = NAVY
 # stamp Korean outline then fill
 for yy, xx in zip(*np.where(outline_mask)):
     target[yy, xx] = OUTLINE
 for yy, xx in zip(*np.where(fill_mask)):
     target[yy, xx] = ramp[min(max(yy, RY0), RY1)]
 
-# ---- write back per sprite: only pixels inside R that changed role ----
+# ---- write back per sprite ----
 korea_ink = fill_mask | outline_mask
+erase_here = erase_full & (~korea_ink)
 changed = 0
 for sp in logo:
     cols = objpal(sp['pn'])
@@ -163,17 +177,19 @@ for sp in logo:
             ti = tile_index_2d(sp, tx, ty)
             for py in range(8):
                 sy = sp['y'] + ty*8 + py
-                if not (RY0 <= sy <= RY1): continue
+                if not (0 <= sy < H): continue
                 for px in range(8):
                     sx = sp['x'] + tx*8 + px
-                    if not (RX0 <= sx <= RX1): continue
-                    cur = get_px(ti, py, px)
-                    if korea_ink[sy, sx]:
+                    if not (0 <= sx < W): continue
+                    if korea_ink[sy, sx]:                      # draw Korean
+                        cur = get_px(ti, py, px)
                         nv = nearest(cols, tuple(int(c) for c in target[sy, sx]))
                         if nv != cur: set_px(ti, py, px, nv); changed += 1
-                    elif gold[sy, sx] and cur != 0:           # erase leftover katakana
-                        nv = nearest(cols, darkcol)
-                        if nv != cur: set_px(ti, py, px, nv); changed += 1
+                    elif erase_here[sy, sx]:                   # wipe katakana -> navy
+                        cur = get_px(ti, py, px)
+                        if cur != 0:
+                            nv = nearest(cols, NAVY)
+                            if nv != cur: set_px(ti, py, px, nv); changed += 1
 print("pixels changed:", changed)
 
 # ---- re-render preview with the modified FG (2D) ----
