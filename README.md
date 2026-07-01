@@ -12,16 +12,16 @@
 
 ## 패치 다운로드 & 적용 (Patch)
 
-완성된 한글 패치: **[`patch/SRWK-Korean-v1.1.xdelta`](patch/SRWK-Korean-v1.1.xdelta)** (약 1.3 MB, xdelta3 / VCDIFF)
+완성된 한글 패치: **[`patch/SRWK-Korean-v1.2.xdelta`](patch/SRWK-Korean-v1.2.xdelta)** (약 2.1 MB, xdelta3 / VCDIFF)
 
 1. xdelta 적용 도구(xdelta UI, Delta Patcher 등) 또는 명령줄:
    ```
-   xdelta3 -d -s "Super Robot Wars K (Japan).nds" SRWK-Korean-v1.1.xdelta "Super Robot Wars K (Korean).nds"
+   xdelta3 -d -s "Super Robot Wars K (Japan).nds" SRWK-Korean-v1.2.xdelta "Super Robot Wars K (Korean).nds"
    ```
 2. **기준 ROM** (본인이 합법적으로 덤프한 것):
    - `Super Robot Wars K (Japan).nds` — **67,108,864 바이트, CRC32 `D16DB8AF`**
 3. 결과 ROM:
-   - `Super Robot Wars K (Korean).nds` — **63,691,104 바이트, CRC32 `689CE1C0`**
+   - `Super Robot Wars K (Korean).nds` — **63,691,104 바이트, CRC32 `D194A006`**
 
 > 이 패치는 **YameSoft 한글 패치(ch1~24 등)를 기반으로**, 후반 시나리오 완역 · 메뉴/기체명/시스템 메시지/스태프 크레딧 · 타이틀 로고 한글화 · **전 챕터 아이캐치 한글화** · 대사 박스 프리즈 수정을 더한 것입니다. xdelta 패치는 차분(diff)일 뿐 게임 데이터를 포함하지 않으므로, 적용하려면 위 기준 ROM이 필요합니다.
 
@@ -38,6 +38,9 @@
 | 타이틀 로고 「スーパーロボット大戦」 | `data/add02dat.bin` #2360 | ✅ 「슈퍼로봇대전」 (4th 코덱 재주입) |
 | **용어 일관성 + 품질 리라이트** | 시나리오·전투 | ✅ YS 표기 통일(63규칙) + 전면 품질 리라이트 (시나리오 9.5K박스·전투, 적대적 검증 0오류) |
 | 챕터 아이캐치 「第N話 + 부제」 (59쌍) | `data/add02dat.bin` #2214~#2330 | ✅ 한국어 (Malgun Gothic 4bpp 재주입) |
+| 저작권 크레딧 (©화면 2장) | `data/add02dat.bin` #2371~#2374 | ✅ 한국어 (6행 × 2화면, Malgun Gothic 4bpp) |
+| 반다이남코 크레딧 | `data/add02dat.bin` #1880~#1881 | ✅ 「주식회사 반다이남코게임스」 |
+| 저장/카드 오류 메시지 (3종) | `data/add02dat.bin` #1119~#1122 | ✅ 한국어 (저장 중/전원 끄지 말 것/읽기·쓰기 오류) |
 
 ---
 
@@ -114,6 +117,7 @@ tools/
   _inject_title.py   / _inject_title3.py    타이틀 #2360 재인코딩·재주입
   _export_png.py     / _import_png.py    로고 PNG 추출/주입 (직접 편집용, display-lossless)
   _eyecatch_inject.py  ★ 챕터 아이캐치 59화 한글 주입 (add02 #2214~#2330, Malgun Gothic)
+  _inject_misc_images.py  ★ 저작권·반다이남코·저장오류 메시지 한글 주입 (add02 #1119~#2374)
   _render_ko_eyecatch.py  아이캐치 주입 결과 미리보기 렌더 (add02_patched.bin → PNG)
   _eyepreview.py     아이캐치를 실제 게임 폰트로 렌더 (데모)
 docs/images/         결과 스크린샷
